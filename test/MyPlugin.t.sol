@@ -55,13 +55,7 @@ contract MyPluginStoreNumberTest is MyPluginTest {
     function test_reverts_if_not_auth() public {
         // error DaoUnauthorized({dao: address(_dao),  where: _where,  who: _who,permissionId: _permissionId });
         vm.expectRevert(
-            abi.encodeWithSelector(
-                DaoUnauthorized.selector,
-                dao,
-                plugin,
-                address(this),
-                keccak256("STORE_PERMISSION")
-            )
+            abi.encodeWithSelector(DaoUnauthorized.selector, dao, plugin, address(this), keccak256("STORE_PERMISSION"))
         );
         plugin.storeNumber(69);
     }

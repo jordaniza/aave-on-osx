@@ -5,8 +5,10 @@ openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/
 openzeppelin-contracts/=lib/openzeppelin-contracts/
 osx/=lib/osx/
 
-@aragon/osx/core=lib/osx/packages/contracts/src/core/
-@aragon/osx/framework=lib/osx/packages/contracts/src/framework/
+@aragon/osx/core/=lib/osx/packages/contracts/src/core/
+@aragon/osx/framework/=lib/osx/packages/contracts/src/framework/
+@aragon/osx/plugins/=lib/osx/packages/contracts/src/plugins/
+@aragon/osx/utils/=lib/osx/package/contracts/utils/
 @oz/=lib/openzeppelin-contracts/contracts/
 @openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
 @openzeppelin/=lib/openzeppelin-contracts/contracts/

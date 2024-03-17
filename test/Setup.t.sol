@@ -1,10 +1,34 @@
 pragma solidity 0.8.24;
 
-import {Test} from "forge-std/Test.sol";
+// external libs
+import {ERC1967Proxy} from "@oz/proxy/ERC1967/ERC1967Proxy.sol";
+import {ENS} from "@ensdomains/ens-contracts/contracts/registry/ENS.sol";
 
+// aragon core
 import {DAO} from "@aragon/osx/core/dao/DAO.sol";
 import {PermissionLib} from "@aragon/osx/core/permission/PermissionLib.sol";
-import {ERC1967Proxy} from "@oz/proxy/ERC1967/ERC1967Proxy.sol";
+
+// aragon framework
+import {ENSSubdomainRegistrar} from "@aragon/osx/framework/utils/ens/ENSSubdomainRegistrar.sol";
+import {DAORegistry} from "@aragon/osx/framework/dao/DAORegistry.sol";
+import {PluginRepoFactory} from "@aragon/osx/framework/plugin/repo/PluginRepoFactory.sol";
+import {PluginRepoRegistry} from "@aragon/osx/framework/plugin/repo/PluginRepoRegistry.sol";
+import {PluginSetupProcessor} from "@aragon/osx/framework/plugin/setup/PluginSetupProcessor.sol";
+import {DAOFactory} from "@aragon/osx/framework/dao/DAOFactory.sol";
+
+// forge
+import {Test} from "forge-std/Test.sol";
+
+// local
+import {MockENS} from "./mocks/MockENS.sol";
+
+// constants
+bytes32 constant PLUGIN_ETH = keccak256("plugin.dao.eth");
+bytes32 constant DAO_ETH = keccak256("dao.eth");
+
+function bytes32ToAddress(bytes32 _bytes32) pure returns (address) {
+    return address(uint160(uint256(_bytes32)));
+}
 
 /**
  * @title TestNoFork
@@ -14,6 +38,14 @@ import {ERC1967Proxy} from "@oz/proxy/ERC1967/ERC1967Proxy.sol";
 contract TestNoFork is Test {
     address deployer = address(420);
     DAO managementDAO;
+    MockENS ens;
+    ENSSubdomainRegistrar daoSDR;
+    ENSSubdomainRegistrar pluginSDR;
+    DAOFactory daoFactory;
+    DAORegistry daoRegistry;
+    PluginRepoFactory pluginRepoFactory;
+    PluginRepoRegistry pluginRepoRegistry;
+    PluginSetupProcessor pluginSetupProcessor;
 
     function testSetup() public {
         vm.startPrank(deployer);
@@ -85,7 +117,68 @@ contract TestNoFork is Test {
 
         // deploy the mock ENS and connect it, skip the actual setup we don't care for unit tests
         {
+            ens = new MockENS();
+            {
+                ens.setResolver(DAO_ETH, bytes32ToAddress(DAO_ETH));
+                ens.setResolver(PLUGIN_ETH, bytes32ToAddress(PLUGIN_ETH));
+            }
+            {
+                ENSSubdomainRegistrar impl = new ENSSubdomainRegistrar();
 
+                ERC1967Proxy daoSDRProxy = new ERC1967Proxy(
+                    address(impl),
+                    abi.encodeCall(
+                        ENSSubdomainRegistrar.initialize,
+                        (managementDAO, ENS(address(ens)), DAO_ETH)
+                    )
+                );
+
+                ERC1967Proxy pluginSDRPtoxy = new ERC1967Proxy(
+                    address(impl),
+                    abi.encodeCall(
+                        ENSSubdomainRegistrar.initialize,
+                        (managementDAO, ENS(address(ens)), PLUGIN_ETH)
+                    )
+                );
+
+                daoSDR = ENSSubdomainRegistrar(payable(address(daoSDRProxy)));
+                pluginSDR = ENSSubdomainRegistrar(payable(address(pluginSDRPtoxy)));
+            }
+        }
+
+        // deploy the DAO registry
+        {
+            DAORegistry impl = new DAORegistry();
+            ERC1967Proxy proxy = new ERC1967Proxy(
+                address(impl),
+                abi.encodeCall(DAORegistry.initialize, (managementDAO, daoSDR))
+            );
+            daoRegistry = DAORegistry(payable(address(proxy)));
+        }
+
+        // deploy plugin repo registry
+        {
+            PluginRepoRegistry impl = new PluginRepoRegistry();
+            ERC1967Proxy proxy = new ERC1967Proxy(
+                address(impl),
+                abi.encodeCall(PluginRepoRegistry.initialize, (managementDAO, pluginSDR))
+            );
+            pluginRepoRegistry = PluginRepoRegistry(payable(address(proxy)));
+        }
+
+        // deploy the non-upgradeable plugin repo factory
+        {
+            pluginRepoFactory = new PluginRepoFactory(pluginRepoRegistry);
+        }
+
+        // deploy the non-upgradeable plugin setup processor
+        {
+            pluginSetupProcessor = new PluginSetupProcessor(pluginRepoRegistry);
+        }
+
+        // deploy the non-upgradeable DAO factory
+        {
+            daoFactory = new DAOFactory(daoRegistry, pluginSetupProcessor);
         }
 
         vm.stopPrank();
